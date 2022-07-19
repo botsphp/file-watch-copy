@@ -63,7 +63,7 @@ func init() {
 		copyDir = os.Args[2]
 	}
 
-	if len(copyDir) > 0 || !IsDir(copyDir) {
+	if len(copyDir) == 0 || !IsDir(copyDir) {
 		fmt.Fprintln(os.Stderr, "copy target dir is not exists", copyDir)
 	}
 
