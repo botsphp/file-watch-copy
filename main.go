@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"github.com/botsphp/fsnotify"
 	"io"
 	"os"
 	"os/exec"
@@ -11,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,6 +23,7 @@ Example:
   watch D:/Windows
 `
 
+var mux sync.Mutex
 var (
 	last     time.Time
 	interval time.Duration
@@ -77,7 +77,7 @@ func init() {
 }
 
 func main() {
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := NewWatcher()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -107,7 +107,7 @@ func main() {
 
 				//只处理新增和写入结束
 				if ev.IsCreate() || ev.IsAttrib() {
-					if err := sync(ev.GetFile()); err != nil {
+					if err := syncFile(ev.GetFile()); err != nil {
 						fmt.Fprintln(os.Stderr, err)
 					}
 				}
@@ -194,7 +194,7 @@ func ResolvePaths(args []string) ([]string, error) {
 	return resolved, nil
 }
 
-func sync(filePath string) error {
+func syncFile(filePath string) error {
 	if len(copyDir) == 0 || !IsDir(copyDir) {
 		return nil
 	}
@@ -225,7 +225,7 @@ func sync(filePath string) error {
 		time.AfterFunc(time.Second*time.Duration(sleep), func() {
 			// 文件被删除则不处理
 			if IsFile(filePath) {
-				_, err = copyFile(newPath, filePath)
+				err = Copy(filePath, newPath)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, err)
 				} else {
@@ -256,28 +256,22 @@ func mkdirAll(path string) error {
 	return os.MkdirAll(path, os.ModePerm)
 }
 
-func copyFile(dstFileName string, srcFileName string) (written int64, err error) {
-	srcFile, err := os.Open(srcFileName)
+func Copy(src, dst string) error {
+	in, err := os.Open(src)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		return err
 	}
-	defer srcFile.Close()
+	defer in.Close()
 
-	//通过srcFile，获取到READER
-	reader := bufio.NewReader(srcFile)
-
-	//打开dstFileName
-	dstFile, err := os.OpenFile(dstFileName, os.O_WRONLY|os.O_CREATE, 0666)
+	out, err := os.Create(dst)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+		return err
 	}
+	defer out.Close()
 
-	//通过dstFile，获取到WRITER
-	writer := bufio.NewWriter(dstFile)
-	//writer.Flush()
-
-	defer dstFile.Close()
-
-	return io.Copy(writer, reader)
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Close()
 }
