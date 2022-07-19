@@ -1,0 +1,1 @@
+CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "-s -w" -o watch-windows-386.exe
