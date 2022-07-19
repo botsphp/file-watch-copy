@@ -1,19 +1,15 @@
 package main
 
 import (
-	"fmt"
 	"io"
+	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 )
-
-const version = "0.3.0"
 
 const usage = `
 Usage:
@@ -23,7 +19,6 @@ Example:
   watch D:/Windows
 `
 
-var mux sync.Mutex
 var (
 	last     time.Time
 	interval time.Duration
@@ -49,13 +44,13 @@ type options struct {
 
 func init() {
 	if len(os.Args) == 1 {
-		fmt.Fprintln(os.Stderr, usage)
+		log.Println(usage)
 		os.Exit(0)
 	}
 
 	paths, err = ResolvePaths([]string{os.Args[1]})
 	if len(paths) <= 0 {
-		fmt.Fprintln(os.Stderr, usage)
+		log.Println(usage)
 		os.Exit(2)
 	}
 
@@ -64,12 +59,12 @@ func init() {
 	}
 
 	if len(copyDir) == 0 || !IsDir(copyDir) {
-		fmt.Fprintln(os.Stderr, "copy target dir is not exists", copyDir)
+		log.Println("copy target dir is not exists", copyDir)
 	}
 
 	interval, err = time.ParseDuration(opts.Interval)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		log.Println(err)
 		os.Exit(1)
 	}
 
@@ -79,7 +74,7 @@ func init() {
 func main() {
 	watcher, err := NewWatcher()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		log.Println(err)
 		os.Exit(1)
 	}
 	done := make(chan bool)
@@ -90,7 +85,7 @@ func main() {
 	go func() {
 		<-interrupt
 		if !opts.Quiet {
-			fmt.Fprintln(os.Stdout, "Interrupted. Cleaning up before exiting...")
+			log.Println("Interrupted. Cleaning up before exiting...")
 		}
 		watcher.Close()
 		os.Exit(0)
@@ -102,17 +97,17 @@ func main() {
 			select {
 			case ev := <-watcher.Event:
 				if !opts.Quiet {
-					fmt.Fprintln(os.Stdout, ev)
+					log.Println(ev)
 				}
 
 				//只处理新增和写入结束
 				if ev.IsCreate() || ev.IsAttrib() {
 					if err := syncFile(ev.GetFile()); err != nil {
-						fmt.Fprintln(os.Stderr, err)
+						log.Println(err)
 					}
 				}
 			case err := <-watcher.Error:
-				fmt.Fprintln(os.Stderr, err)
+				log.Println(err)
 				if opts.Halt {
 					os.Exit(1)
 				}
@@ -124,30 +119,13 @@ func main() {
 	for _, p := range paths {
 		err = watcher.Watch(p)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			log.Println(err)
 			os.Exit(1)
 		}
 	}
 
 	// wait and watch
 	<-done
-}
-
-func ExecCommand() error {
-	if opts.OnChange == "" {
-		return nil
-	} else {
-		args := strings.Split(opts.OnChange, " ")
-		cmd := exec.Command(args[0], args[1:]...)
-
-		if !opts.Quiet {
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-		}
-		cmd.Stdin = os.Stdin
-
-		return cmd.Run()
-	}
 }
 
 // ResolvePaths Resolve path arguments by walking directories and adding subfolders.
@@ -208,7 +186,7 @@ func syncFile(filePath string) error {
 
 	if IsDir(filePath) {
 		if IsDir(newPath) {
-			fmt.Fprintln(os.Stdout, "dir exists", newPath)
+			log.Println("dir exists", newPath)
 			return nil
 		}
 		return mkdirAll(newPath)
@@ -221,22 +199,20 @@ func syncFile(filePath string) error {
 			return err
 		}
 
-		fmt.Fprintf(os.Stdout, "copy file from %s to %s in %d secend\n", filePath, newPath, sleep)
+		log.Printf("copy file from %s to %s in %d secend\n", filePath, newPath, sleep)
 		time.AfterFunc(time.Second*time.Duration(sleep), func() {
 			// 文件被删除则不处理
 			if IsFile(filePath) {
 				err = Copy(filePath, newPath)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, err)
+					log.Println(err)
 				} else {
-					fmt.Fprintln(os.Stdout, "file copy success", newPath)
+					log.Println("file copy success", newPath)
 				}
 			}
 		})
-
 		return err
 	}
-
 	return nil
 }
 
