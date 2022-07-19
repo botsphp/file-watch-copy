@@ -259,7 +259,7 @@ func mkdirAll(path string) error {
 func copyFile(dstFileName string, srcFileName string) (written int64, err error) {
 	srcFile, err := os.Open(srcFileName)
 	if err != nil {
-		fmt.Printf("open file error = %v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 	}
 	defer srcFile.Close()
 
@@ -269,7 +269,7 @@ func copyFile(dstFileName string, srcFileName string) (written int64, err error)
 	//打开dstFileName
 	dstFile, err := os.OpenFile(dstFileName, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		fmt.Printf("open file error = %v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
